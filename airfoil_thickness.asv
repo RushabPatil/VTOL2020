@@ -1,0 +1,23 @@
+function total_height = airfoil_thickness(air_foil_input)
+% air_foil_input: the file name containing the points comprising the
+% airfoil geometry (excluding the .txt). To ensure commonality with the
+% input required for air_foil_find.m, ensure the .txt files have the same
+% name
+
+% this function will only work if the data is points are arranged in a
+% n-by-2 matrix, where column 1 is horizontal position and column 2 is the
+% vertical position. There must also not be the airfoil name in the first
+% row (which is the case in 
+
+string = join([air_foil_input,'.txt']);
+
+fileID = fopen(string,'r');
+formatSpec = '%f %f';
+size_points = [2 Inf];
+in_points = fscanf(fileID,formatSpec,size_points);
+points = in_points';
+
+Max = max(points(:,2));
+Min = min(points(:,2));
+
+total_height = Max - Min;

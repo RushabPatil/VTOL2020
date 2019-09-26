@@ -1,6 +1,5 @@
 function [Energy_net, W_max] = takeoff_optimization(motor_name,num_motors,mass,scale,plot_trigger)
 %% Optimize motor total power usage for takeoff
-
 % motor_name: string corresponding to name of selected motor
 % num_motors: number of VTOL motors on design
 % mass: takeoff mass of aircraft
@@ -23,10 +22,10 @@ points = fscanf(fileID,formatSpec,size_points)';
 
 g = 9.81;   % gravity, m s^-2
 % columns of useful stuff: [power, thrust(N)], attaching [0, 0] to the top
-useful_stuff = [0,0; points(:,3), g*0.001*points(:,2)];
+motor_data = [0,0; points(:,3), g*0.001*points(:,2)];
 
 % find maximum power listed by manufacturer
-thrust_limit = max(useful_stuff(:,2));
+thrust_limit = max(motor_data(:,2));
 % we will linearly interpolate within the motor data later
 
 %% LQR situation
@@ -59,7 +58,7 @@ T_ind = mass*(u + g)/num_motors;
 
 % linearly interpolate T_ind to yield W_ind (Note: if power required by a
 % motor exceeds range provided by manufacturer, a cell will be set to NaN)
-W_ind = interp1q(useful_stuff(:,2),useful_stuff(:,1),T_ind);
+W_ind = interp1q(motor_data(:,2),motor_data(:,1),T_ind);
 W_net = W_ind*num_motors;
 W_max = max(W_net);
 
@@ -87,15 +86,15 @@ if plot_trigger == 1
     xlabel('Time (s)')
 
     figure
-    plot(W_ind, T_ind,'.b',useful_stuff(:,1),useful_stuff(:,2),"*r")
+    plot(W_ind, T_ind,'.b',motor_data(:,1),motor_data(:,2),"*r")
     legend('Predicted Relationships','Manufacturer Data','location','best')
     xlabel('Power (W)')
-    ylabel('Thrust (T)')
+    ylabel('Thrust (N)')
     title('Thrust vs. Power of EMAX MT3510 600KV')
 end
 
-    function dxdt = takeoff(t,x,kp,kd)
-        dxdt(1,1) = x(2);
-        dxdt(2,1) = -kp*x(1) - kd*x(2);
-    end
+function dxdt = takeoff(t,x,kp,kd)
+    dxdt(1,1) = x(2);
+    dxdt(2,1) = -kp*x(1) - kd*x(2);
+end
 end

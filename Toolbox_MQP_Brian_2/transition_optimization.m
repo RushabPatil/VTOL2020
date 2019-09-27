@@ -1,5 +1,5 @@
-function [Energy_net, W_max] = transition_optimization(v_motor_name,h_motor_name,num_motors,mass,Cl,Cd,v_des,S,scale,plot_trigger)
-%% Optimize motor total power usage for takeoff
+function [Energy_net, W_max] = transition_optimization(v_motor_name,h_motor_name,num_motors,mass,Cl,Cd,v_des,S,Q_diag,plot_trigger)
+%% Optimize motor total power usage for transition between hover and horizontal flight
 % v_motor_name: string corresponding to name of selected vertical motors
 % h_motor_name: string corresponding to name of selected horizontal motor
 % num_motors: number of VTOL motors on design
@@ -7,8 +7,7 @@ function [Energy_net, W_max] = transition_optimization(v_motor_name,h_motor_name
 % Cl: aircraft coefficient of lift
 % Cd: aircraft coefficient of drag
 % v_des: desired cruise velocity, m s^-1
-% scale: relative weight of Q (steady-state error) vs. R (control effort)
-% in LQR (norm of entries in Q/norm of entries in R)
+% Q_diag: diagonal values of Q matrix
 % plot_trigger: indicates if plots should be generated
     % = 1: generate plots
     % = 0: do not generate plots
@@ -35,7 +34,7 @@ max_thrust_h = max(motor_data_h(:,2));
 
 %% LQR situation
 % original Q matrix (weighing error of all 3 states equally)
-Q = scale*eye(3);
+Q = diag(Q_diag);
 R = eye(2);
 
 % system properties

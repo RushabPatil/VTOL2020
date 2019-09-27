@@ -9,8 +9,8 @@ function [Energy_net, W_max] = transition_optimization(v_motor_name,h_motor_name
 % v_des: desired cruise velocity, m s^-1
 % Q_diag: diagonal values of Q matrix
 % plot_trigger: indicates if plots should be generated
-    % = 1: generate plots
-    % = 0: do not generate plots
+    % = true: generate plots
+    % = false: do not generate plots
 
 % necessary constants
 g = 9.81;   % gravity, m s^-2
@@ -102,7 +102,7 @@ W_net = W_H + W_V_ind*num_motors;
 % find maximum total power consumption during transition
 W_max = max(W_net);
 
-if plot_trigger == 1
+if plot_trigger == true
     figure
     yyaxis left
     plot(t,x(:,1),'-b')

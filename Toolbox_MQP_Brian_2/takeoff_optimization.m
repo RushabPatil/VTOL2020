@@ -16,7 +16,6 @@ function [Energy_net, W_max] = takeoff_optimization(motor_input,num_motors,mass,
     % = true: aircraft is landing
     % = false: aircraft is taking off
 
-    
 % before anything is done, check to make sure x0 and landing match their
 % desired situations
 if (x0(1) < 0) == landing
@@ -26,7 +25,7 @@ if (x0(1) < 0) == landing
     return
 end
 
-% as of writing a .txt file only exists for the EMAXMT3510_600KV
+% as of writing a .txt file only exists for the EMAXMT3510-600KV motor
 string = motor_input + '.txt';
 
 % open the corresponding .txt file
@@ -41,7 +40,7 @@ g = 9.81;   % gravity, m s^-2
 % columns of useful stuff: [power, thrust(N)], attaching [0, 0] to the top
 motor_data = [0,0; points(:,3), g*0.001*points(:,2)];
 
-% find maximum power listed by manufacturer
+% find maximum thrust listed by manufacturer
 thrust_limit = max(motor_data(:,2));
 % we will linearly interpolate within the motor data later
 
@@ -62,13 +61,18 @@ K = lqr(A,B,Q,R,N);
 kp = K(1);
 kd = K(2);
 
-[t,x] = ode45(@(t,x) takeoff(t,x,kp,kd), [0 20], x0);
+[t,x] = ode45(@(t,x) takeoff(t,x,kp,kd,thrust_limit), [0 20], x0);
 
 % calculate control signal u(t) at each time from states
 u = -kp*x(:,1) - kd*x(:,2);
 % convert control signal into total thrust from the quadcopter's vertical
 % motors, dividing by number of motors
 T_ind = mass*(u + g)/num_motors;
+% note: the simulation capped T_ind at the maximum thrust per motor
+if max(T_ind) >= thrust_limit
+    fprintf('Warning: Current conditions involve motors running at max throttle')
+    T_ind(T_ind >= thrust_limit) = thrust_limit;
+end
 % if landing, zero out the thrust at any instant where the aircraft
 % altitude = 0 meters
 if landing == true
@@ -84,27 +88,35 @@ end
 W_ind = interp1q(motor_data(:,2),motor_data(:,1),T_ind);
 W_net = W_ind*num_motors;
 W_max = max(W_net);
-
-v = x(:,2);
-del_t = t(2:end) - t(1:end-1);
-Acceleration = (v(2:end) - v(1:end-1))./del_t;
-
-if max(T_ind) > thrust_limit
-    Energy_net = 'Motors are being overworked. Change number of motors or kind of motors';
+% find settling time of system
+margin = 0.02;
+% find last point where x(1) exceeds margin*x0(1) difference from
+% steady-state. t_s is 1 index after this
+settle_ind = find(abs(x(:,1)) >= margin*abs(x0(1)), 1, 'last') + 1;
+t_s = t(settle_ind);
+x_s = x(settle_ind);
+% if landing just numerically integrate everything, as thrust will hit 0 as
+% soon as the aircraft touches the ground
+if landing
+    Energy_net = max(cumtrapz(t,W_net))/3600;
 else
-    Energy_net = sum(W_net(1:end-1).*del_t)/3600;
+    % if taking off, only numerically integrate from t = 0 to t_s, where t_s is
+    % the settling time to reach oscillations less than margin % of abs(x0(1))
+    Energy_net = max(cumtrapz(t(1:settle_ind),W_net(1:settle_ind)))/3600;
 end
+Acceleration = diff(x(:,2))./diff(t);
 
 if plot_trigger == true
+    % if told to plot, generate plots of states and power during takeoff
     figure
     subplot(2,1,1)
-    plot(t,x(:,1),'-b',t,x(:,2),'--r',t(1:end-1),Acceleration,'-.g')
-    legend('x(t)','dx/dt(t)','d^2x/dt^2(t)','location','best')
+    plot(t,x(:,1),'-b',t,x(:,2),'--r',t(1:end-1),Acceleration,'-.g',t_s,x_s,'ok')
+    legend('x(t)','dx/dt(t)','d^2x/dt^2(t)','settled','location','best')
     title('Plot of States During Takeoff')
 
     subplot(2,1,2)
-    plot(t,W_net)
-    title('Power Consumption During Takeoff (Linear Interpolation)')
+    plot(t,W_net,t_s,W_net(settle_ind),'ok')
+    title('Net Power Consumption During Takeoff (Linear Interpolation)')
     ylabel('Power (W)')
     xlabel('Time (s)')
 
@@ -116,8 +128,18 @@ if plot_trigger == true
     title('Thrust vs. Power of EMAX MT3510 600KV')
 end
 
-function dxdt = takeoff(t,x,kp,kd)
+function dxdt = takeoff(t,x,kp,kd,thrust_limit)
+    if landing && x(1) <= 0
+        dxdt = zeros(2,1);
+    else
     dxdt(1,1) = x(2);
-    dxdt(2,1) = -kp*x(1) - kd*x(2);
+    u_i = -kp*x(1) - kd*x(2);
+    T_i = mass*(u_i + g)/num_motors;
+        if T_i >= thrust_limit
+            dxdt(2,1) = (num_motors*thrust_limit/mass) - g;
+        else
+            dxdt(2,1) = u_i;
+        end
+    end
 end
 end

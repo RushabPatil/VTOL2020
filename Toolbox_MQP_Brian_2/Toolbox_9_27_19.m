@@ -43,7 +43,7 @@ horz_motor_data=motor_find(motor_input_h);
 
 %Battery Information
 fprintf('Choose from these Batteries:')
-fprintf('ZIPPYCompact35C, Turnigy35C, ZIPPYCompact40C, Turnigy40C,TurnigyNano-Tech45C, TurnigyGraphene45C \n')
+fprintf('ZIPPYCompact35C, Turnigy35C, ZIPPYCompact40C, Turnigy40C, TurnigyNano-Tech45C, TurnigyGraphene45C, MaxAmps150C\n')
 battery_input=input('What is the battery?','s');
 battery_data=battery_find(battery_input);
 %% Calculations
@@ -95,8 +95,13 @@ x0 = [-Target_alt; 0];
 
 Margin = 1;   % fraction of battery dedicated to horizontal flight
 P_autonomy = 0;    %[placeholder] power requirements for full autonomy during steady level flight
-Voltage = 11.1; % voltage of 3S battery
-Capacity = 2.2; % capacity of battery in Ampere-hours
+if isequal(battery_input,'MaxAmps150C')
+    Voltage = 14.7;
+    Capacity = 3.250;
+else
+    Voltage = 11.1; % voltage of 3S battery
+    Capacity = 2.2; % capacity of battery in Ampere-hours
+end
 
 % now sum total transitions and the required energy for each of them
 N_transitions = 4;

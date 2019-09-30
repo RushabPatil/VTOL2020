@@ -1,4 +1,4 @@
-function [Energy_net, W_max] = transition_optimization(v_motor_name,h_motor_name,num_motors,mass,Cl,Cd,v_des,S,Q_diag,plot_trigger)
+function [Energy_net, W_max] = transition_optimization(v_motor_data,h_motor_data,num_motors,mass,Cl,Cd,v_des,S,Q_diag,plot_trigger)
 %% Optimize motor total power usage for transition between hover and horizontal flight
 % v_motor_name: string corresponding to name of selected vertical motors
 % h_motor_name: string corresponding to name of selected horizontal motor
@@ -16,20 +16,10 @@ function [Energy_net, W_max] = transition_optimization(v_motor_name,h_motor_name
 g = 9.81;   % gravity, m s^-2
 rho = 1.225;    % density of air, kg m^-3
 
-string_v = v_motor_name + '.txt';
-string_h = h_motor_name + '.txt';
-% open the .txt file for the motors
-fileID_v = fopen(string_v,'r');
-fileID_h = fopen(string_h,'r');
-% convert the contents of the .txt file to an Nx2 matrix
-formatSpec = '%f %f %f %f %f';
-size_points = [5 Inf];
-points_v = fscanf(fileID_v,formatSpec,size_points)';
-points_h = fscanf(fileID_h,formatSpec,size_points)';
-% columns of useful stuff: [power, thrust(N)]
-motor_data_v = [0, 0; points_v(:,3), g*0.001*points_v(:,2)];
+% columns of horizontal and vertical motor data: [power, thrust(N)]
+motor_data_v = [0, 0; v_motor_data(:,3), g*0.001*v_motor_data(:,2)];
 max_thrust_v = max(motor_data_v(:,2));
-motor_data_h = [0, 0; points_h(:,3), g*0.001*points_h(:,2)];
+motor_data_h = [0, 0; h_motor_data(:,3), g*0.001*h_motor_data(:,2)];
 max_thrust_h = max(motor_data_h(:,2));
 
 %% LQR situation
@@ -72,32 +62,27 @@ Vert_thrust(Vert_thrust < 0) = 0;
 % convert each thrust to a power per motor based on number of motors
 % and linearly interpolate for each motor
 Vert_thrust_ind = Vert_thrust/num_motors;
-
-Error_trigger = false;
-% check if maximum thrust listed by manufacturer for either motor set is
-% exceeded
-if max(Vert_thrust_ind) > max_thrust_v
-    fprintf('Warning: too much power in each vertical motor. More motors required')
-    Error_trigger = true;
+% note: the simulation capped T_ind at the maximum thrust per motor
+if max(Vert_thrust_ind) >= max_thrust_v
+    fprintf('Warning: Current conditions involve motors running at max throttle')
+    Vert_thrust_ind(Vert_thrust_ind >= max_thrust_v) = max_thrust_v;
 end
 
-if max(Horz_thrust) > max_thrust_h
-    fprintf('Warning: too much power in horizontal motor. A different motor is required')
-    Error_trigger = true;
-end
-
-if Error_trigger == true
-    Energy_net = NaN;
-    W_max = NaN;
-    return
-end
+% find settling time of system based on horizontal velocity
+margin = 0.02;
+% find last point where x(3) exceeds margin*abs(x0(3)) difference from
+% steady-state. t_s is 1 index after this
+settle_ind = find(abs(x(:,3)) >= margin*abs(x0(3)), 1, 'last') + 1;
+t_s = t(settle_ind);
+x_s = x(settle_ind);
 
 W_V_ind = interp1q(motor_data_v(:,2),motor_data_v(:,1),Vert_thrust_ind);
 W_H = interp1q(motor_data_h(:,2),motor_data_h(:,1),Horz_thrust);
 
+W_net = W_V_ind*num_motors+W_H;
+
 % numerically integrate with left-handed Riemann sum
-Energy_net = del_t'*(W_H(1:end-1) + num_motors*W_V_ind(1:end-1))/3600;
-W_net = W_H + W_V_ind*num_motors;
+Energy_net = max(cumtrapz(t(1:settle_ind),W_net(1:settle_ind))/3600;
 
 % find maximum total power consumption during transition
 W_max = max(W_net);
@@ -117,14 +102,14 @@ if plot_trigger == true
     title('Plot of Vertical States During Transition')
 
     figure
-    plot(t,(x(:,3) + v_des),'-.g')
+    plot(t,(x(:,3) + v_des),'-.g',t,(x(t_settled,3) + v_des),'ok')
     ylabel('Horizontal Velocity (m/s)')
     xlabel('Time (s)')
     title('Plot of Horizontal Velocity During Transition')
 
     figure
-    plot(t,num_motors*W_V_ind,'-b',t,W_H,'--r',t,W_net,'-.g')
-    legend('P_V(t)','P_H(t)','Pnet(t)')
+    plot(t,num_motors*W_V_ind,'-b',t,W_H,'--r',t,W_net,'-.g',t_s,W_net(settle_ind),'ok')
+    legend('P_V(t)','P_H(t)','Pnet(t)','settled','location','best')
     title('Power Consumption During Takeoff')
     axis([0 10 0 1000])
     ylabel('Power (W)')

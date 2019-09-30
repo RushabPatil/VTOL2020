@@ -1,6 +1,7 @@
-function [Energy_net, W_max] = takeoff_optimization(motor_input,num_motors,mass,x0,scale,plot_trigger,landing)
+function [Energy_net, W_max] = takeoff_optimization(motor_info,num_motors,mass,x0,scale,plot_trigger,landing)
 %% Optimize motor total power usage for takeoff and landing
-% motor_name: string corresponding to name of selected motor
+% motor_info: Nx5 array containing motor performance while varying input
+% current
 % num_motors: number of VTOL motors on design
 % mass: mass of aircraft, kg
 % x0: initial conditions, taking the form [distance above target altitude;
@@ -25,20 +26,9 @@ if (x0(1) < 0) == landing
     return
 end
 
-% as of writing a .txt file only exists for the EMAXMT3510-600KV motor
-string = motor_input + '.txt';
-
-% open the corresponding .txt file
-fileID = fopen(string,'r');
-
-% convert the contents of the .txt file to an Nx2 matrix
-formatSpec = '%f %f %f %f %f';
-size_points = [5 Inf];
-points = fscanf(fileID,formatSpec,size_points)';
-
 g = 9.81;   % gravity, m s^-2
-% columns of useful stuff: [power, thrust(N)], attaching [0, 0] to the top
-motor_data = [0,0; points(:,3), g*0.001*points(:,2)];
+% columns of motor_data: [power, thrust(N)], attaching [0, 0] to the top
+motor_data = [0,0; motor_info(:,3), g*0.001*motor_info(:,2)];
 
 % find maximum thrust listed by manufacturer
 thrust_limit = max(motor_data(:,2));

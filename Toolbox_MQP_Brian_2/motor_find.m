@@ -1,6 +1,6 @@
 % Aerospace MQP VTOL UAV Optimizer motor_find
 function [motor_info, motor_mass] = motor_find(motor_input);
-string = motor_input + '.txt';
+string = motor_input + ".txt";
 
 % open the corresponding .txt file
 fileID = fopen(string,'r');

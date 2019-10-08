@@ -27,11 +27,10 @@ max_thrust_h = max(motor_data_h(:,2));
 Q = diag(Q_diag);
 R = eye(2);
 
-% system properties
+% system properties (N assumed to be 0)
 A = [0 1 0; 0 0 0; 0 0 0];
 B = [0 0; 0 1; 1 0];
-N = 0;
-K = lqr(A,B,Q,R,N);
+K = lqr(A,B,Q,R);
 kp = K(2,1);
 kd = K(2,2);
 kp_vel = K(1,3);
@@ -43,7 +42,6 @@ x0 = [1; 0; -v_des];
 
 % convert each control signal into required motor thrust after accounting
 % for aerodynamic forces
-del_t = t(2:end) - t(1:end-1);
 V_h = x(:,3);
 Q_t = 0.5*rho*(V_h + v_des).*(V_h + v_des);
 D_t = Cd*Q_t*S;
@@ -74,12 +72,22 @@ margin = 0.02;
 % steady-state. t_s is 1 index after this
 settle_ind = find(abs(x(:,3)) >= margin*abs(x0(3)), 1, 'last');
 t_s = t(settle_ind);
-x_s = x(settle_ind);
+x_s = x(settle_ind,:);
 
 W_V_ind = interp1q(motor_data_v(:,2),motor_data_v(:,1),Vert_thrust_ind);
 W_H = interp1q(motor_data_h(:,2),motor_data_h(:,1),Horz_thrust);
 
-W_net = W_V_ind*num_motors+W_H;
+%{ 
+% un-supress the stuff below to print mean and peak power for each motor
+type
+V_max = max(W_V_ind)
+V_mean = mean(W_V_ind)
+H_max = max(W_H)
+H_mean = mean(W_H)
+%}
+
+% determine total power consumption
+W_net = W_V_ind*num_motors + W_H;
 
 % numerically integrate with left-handed Riemann sum
 Energy_net = max(cumtrapz(t(1:settle_ind),W_net(1:settle_ind))/3600);
@@ -88,9 +96,13 @@ Energy_net = max(cumtrapz(t(1:settle_ind),W_net(1:settle_ind))/3600);
 W_max = max(W_net);
 
 if plot_trigger == true
+    fprintf('System settles after %f seconds',t_s)
+    
+    % plot vertical states, leaving a vertical dotted line to indicate when
+    % the system settles
     figure
     yyaxis left
-    plot(t,x(:,1),'-b')
+    plot(t,x(:,1),'-b',[t_s, t_s],[-0.5, 1],'--k')
     ylabel('altitude error (m)')
     axis([0 10 -0.5 1])
     yyaxis right
@@ -99,17 +111,19 @@ if plot_trigger == true
     legend('z(t)','dz/dt(t)')
     xlabel('Time (s)')
     axis([0 10 -0.25 0])
-    title('Plot of Vertical States During Transition')
-
+    title("Plot of Vertical States During Transition: Scale = " + num2str(Q_diag))
+    
+    % plot horizontal velocity
     figure
-    plot(t,(x(:,3) + v_des),'-.g',t,(x(t_settled,3) + v_des),'ok')
+    plot(t,(x(:,3) + v_des),'-.g',t_s,(x_s(3) + v_des),'ok')
     ylabel('Horizontal Velocity (m/s)')
     xlabel('Time (s)')
     title('Plot of Horizontal Velocity During Transition')
 
+    % plot power consumption
     figure
-    plot(t,num_motors*W_V_ind,'-b',t,W_H,'--r',t,W_net,'-.g',t_s,W_net(settle_ind),'ok')
-    legend('P_V(t)','P_H(t)','Pnet(t)','settled','location','best')
+    plot(t,num_motors*W_V_ind,'-b',t,W_H,'--r',t,W_net,'-.g',[t_s t_s],[0 1000],'--k')
+    legend('P_V(t)','P_H(t)','Pnet(t)','settled')
     title('Power Consumption During Takeoff')
     axis([0 10 0 1000])
     ylabel('Power (W)')

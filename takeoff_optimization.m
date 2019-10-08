@@ -19,7 +19,7 @@ function [Energy_net, W_max] = takeoff_optimization(motor_info,num_motors,mass,x
 
 % before anything is done, check to make sure x0 and landing match their
 % desired situations
-if (x0(1) < 0) == landing
+if (x0(1) < 0) && landing
     fprintf("Invalid initial conditions")
     Energy_net = NaN;
     W_max = NaN;
@@ -63,9 +63,11 @@ if max(T_ind) >= thrust_limit
     fprintf('Warning: Current conditions involve motors running at max throttle')
     T_ind(T_ind >= thrust_limit) = thrust_limit;
 end
+% zero out any negative thrust requests
+T_ind(T_ind < 0) = 0;
 % if landing, zero out the thrust at any instant where the aircraft
 % altitude = 0 meters
-if landing == true
+if landing
     T_ind(x(:,1) <= 0) = 0;
     % in addition, make plotting sensical by setting nonzero altitudes to 0
     xplot1 = x(:,1);
@@ -97,25 +99,39 @@ end
 Acceleration = diff(x(:,2))./diff(t);
 
 if plot_trigger == true
+    if landing
+        state = "Landing";
+    else
+        state = "Takeoff";
+    end
+    fprintf("The system settles after %f seconds",t_s);
+    
     % if told to plot, generate plots of states and power during takeoff
+    s_bound = [-6 8];
+    t_bound = [0 12];
     figure
     subplot(2,1,1)
-    plot(t,x(:,1),'-b',t,x(:,2),'--r',t(1:end-1),Acceleration,'-.g',t_s,x_s,'ok')
-    legend('x(t)','dx/dt(t)','d^2x/dt^2(t)','settled','location','best')
-    title('Plot of States During Takeoff')
-
+    plot(t,x(:,1),'-b',t,x(:,2),'--r',t(1:end-1),Acceleration,'-.g',[t_s t_s],s_bound,'--k')
+    legend('x(t)','dx/dt(t)','d^2x/dt^2(t)')
+    title("Plot of States During " + state + ": Scale = " + num2str(scale))
+    yticks(s_bound(1):2:s_bound(2))
+    axis([t_bound, s_bound])
+    
     subplot(2,1,2)
-    plot(t,W_net,t_s,W_net(settle_ind),'ok')
-    title('Net Power Consumption During Takeoff (Linear Interpolation)')
+    plot(t,W_net,[t_s t_s],[200 800],'--k')
+    title("Net Power Consumption During " + state + " (Linear Interpolation)")
     ylabel('Power (W)')
     xlabel('Time (s)')
-
+    yticks(200:100:800)
+    axis([t_bound, 200 800])
+%{
     figure
-    plot(W_ind, T_ind,'.b',motor_data(:,1),motor_data(:,2),"*r")
+    plot(W_ind, T_ind,'.b',motor_data(:,1),motor_data(:,2),'*r')
     legend('Predicted Relationships','Manufacturer Data','location','best')
     xlabel('Power (W)')
     ylabel('Thrust (N)')
-    title('Thrust vs. Power of EMAX MT3510 600KV')
+    title('Thrust vs. Power of Motor')
+%}    
 end
 
 function dxdt = takeoff(t,x,kp,kd,thrust_limit)
@@ -127,6 +143,8 @@ function dxdt = takeoff(t,x,kp,kd,thrust_limit)
     T_i = mass*(u_i + g)/num_motors;
         if T_i >= thrust_limit
             dxdt(2,1) = (num_motors*thrust_limit/mass) - g;
+        elseif T_i <= 0
+            dxdt(2,1) = -g;
         else
             dxdt(2,1) = u_i;
         end

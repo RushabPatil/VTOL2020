@@ -22,7 +22,7 @@ if use_defaults == 1
     air_foil_input = 'E423';
     V_input = '15';
     %Motor Information
-    motor_input_v = 'MT3510_1555_Carbon_Fiber';
+    motor_input_v = 'AT2317_APC9x6';
     motor_input_h = 'AT2317_APC9x6';
     %Battery Information
     battery_input='TurnigyNano-Tech45C';
@@ -121,6 +121,7 @@ W_max_takeoff = W_max_takeoffs(ind_min);
 [E_landing, ind_min] = min(E_landings);
 Q_weight_desiredl = Q_weights(ind_min);
 W_max_landing = W_max_landings(ind_min);
+E_TOL = E_takeoff + E_landing;
 Margin = 0.8;   % fraction of battery dedicated to horizontal flight after accounting for takeoff and landing
 P_autonomy = 20;    %[placeholder] power requirements for full autonomy during steady level flight
 if isequal(battery_input,'MaxAmps150C')
@@ -147,8 +148,8 @@ E_transition_net = N_transitions*E_transition1 + N_transitions_empty*E_transitio
 
 % capacity reserved for flight based on capacity not used for takeoff and
 % transitions
-
-E_flight = Margin*Capacity*Voltage - E_transition_net - E_landing - E_takeoff;
+E_max = Capacity*Voltage;
+E_flight = Margin*E_max - E_transition_net - E_landing - E_takeoff;
 
 % time of flight in seconds, assuming only horizontal flight
 t_horz_1 = E_flight*3600/(Horz_Power + P_autonomy);
@@ -161,7 +162,7 @@ else
     plot_sim = false;
 end
 
-t_horz_2 = flight_simulator(horz_motor_info,Cl,Cd,S,M_L,V_level,E_TOL,E_transition,E_cap,margin,plot_sim);
+t_horz_2 = flight_simulator(vtol_motor_data,Cl,Cdi,S,M_L,V,E_TOL,E_transition_net,E_max,Margin,plot_sim);
 
 %% Score Calculation
 valid_inputs = false;

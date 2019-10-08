@@ -55,7 +55,7 @@ D_straight = Q*S*Cd;
 W_straight = 115;
 
 % add autonomy power requirements for net straight line motion
-W_snet = W_straight + P_autonomy;
+W_snet = W_straight + P_autonomy
 %% turning motion
 % aircraft will only perform 90 degree turns and follow a clockwise path
 % around the field

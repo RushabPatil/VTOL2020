@@ -16,7 +16,7 @@ Ca = cos(alpha1);
 Sa = sin(alpha1);
 Ta = tan(alpha1);
 
-u0 = 13;    % cruise speed, m/s (default is 12 m/s
+u0 = 12;    % cruise speed, m/s (default is 12 m/s
 rho = 1.225;    % air density at sea level, kg m^3
 q_bar = 0.5*rho*u0^2;  % dynamic pressure, N/m^2
 g = 9.81;       % gravitational acceleration, m/s^2
@@ -180,6 +180,13 @@ z_max = 0.14;   % maximum fuselage height, m (fudged)
 w_max = 0.12;    % maximum fuselage width, m (fudged)
 Sb_s = 0.12*0.35 + 0.5*0.01;   % fuselage side surface, m^2 (extremely fudged)
 bh_lb = b_ht/l_b;   % ratio of vertical tail span to fuselage length (fudged)
+c_r2c_vt = 0.25;    % rudder chord as a fraction of vertical tail chord
+b_r2b_vt = 0.8;     % rudder span as a fraction of vertical tail span
+c_rud = c_r2c_vt*c_vt;
+b_rud = b_r2b_vt*b_vt;
+S_rud = c_r2c_vt*c_vt*b_rud;
+Zr = b_vt/2;  % vertical distance between aircraft center of gravity and point of application of lateral force due to rudder deflection
+Xr = lt + 0.75*c_vt - 0.5*c_rud;    % horizontal distance between aircraft center of gravity and point of application of lateral force due to rudder deflection
 
 % Ratios of fuselage dimensions (necessary for Kn, obtained from figure
 % 4.68 (Napolitano, 2012))
@@ -301,10 +308,10 @@ cnr = cnr_w + cnr_v;
 
 % Lateral Control Derivatives
 cl_delA = 0;    % Defined to be 0
-cl_delR = 0;    % Defined to be 0
-cy_delR = abs(cl_av)*etav*S_ht/S*delta_Kr;    % Assumed to be 0 (don't need this for stability, only control)
+cy_delR = abs(cl_av)*etav*S_ht/S*delta_Kr;
+cl_delR = cy_delR*(Zr*cos(alpha1) - Xr*sin(alpha1))/b;
 cn_delA = 0;    % Defined to be 0
-cn_delR = 0;    % Defined to be 0
+cn_delR = -cy_delR*(Xr*cos(alpha1) + Zr*sin(alpha1))/b;
 
 % Nondimensional stability and control derivatives
 Cxu = - (cdu + 2*cd1);
@@ -422,9 +429,6 @@ Lat_modes = eig(Alat)
 % find doubling time of spiral mode
 spiral_double = log(2)/min(abs(real(Lat_modes)))
 
-
-%{
-
 % Dimensional Control Derivatives
 QS = 0.5*rho*u0^2*S;
 X_dele = Cx_dele*QS;
@@ -439,6 +443,8 @@ L_dela = cl_delA*QS*b;
 L_delr = cl_delR*QS*b;
 N_dela = cn_delA*QS*b;
 N_delr = cn_delR*QS*b;
+
+%{
 
 Blong = [X_dele/m_l, X_delp/m_l; Z_dele/(m_l-Zw_dot), Z_delp/(m_l-Zw_dot);
         M_dele/Iy+Mw_dot*Z_dele/(Iy*(m_l-Zw_dot)), M_delp/Iy+Mw_dot*Z_delp/(Iy*(m_l-Zw_dot));
@@ -697,6 +703,37 @@ x0 = zeros(2,1);
 x_ans = fsolve(F,x0)
 
 R_max = rad2deg(x_ans(2))
+
+% Find servo torque required to control both rudders
+
+L = 0.01;   % lever arm of "pull bar" about center of rotation of rudder, m
+
+r = 0.02;   % lever arm of servo horn, m
+i = 1;
+del_rs = 0:0.1:20;
+for del_r = deg2rad(del_rs)
+    Hs(i) = 0.5*q_bar*S_rud*c_rud*sin(del_r);  % Moment about rudder, N-m
+    F_b(i) = 2*Hs(i)/(L*cos(del_r));
+    theta(i) = asin(L/r)*del_r;
+    Ts(i) = abs(F_b(i)*r*cos(theta(i)));    
+    
+    % conversely, just find lateral force due to rudder deflection Y_delr
+    Y(i) = Y_delr*del_r;
+    i = i+1;
+end
+
+% Find max, converting to units used by servos (kg-cm)
+Ts = 100*Ts/g;
+theta_m = rad2deg(max(theta))
+figure
+plot(del_rs,Hs)
+ylabel('Rudder Moments (N-m)')
+yyaxis right
+plot(del_rs,Ts)
+ylabel('Required Torques (kg-cm)')
+figure
+plot(del_rs,[Y;F_b])
+legend('Lateral Force','Rudder force')
 
 %% Functions
 function cl_alpha = liftcurve(AR,M,Sweep)

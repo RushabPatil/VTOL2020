@@ -3,7 +3,7 @@
 clc, clear variables, close all
 
 %% Load Aircraft Properties
-% Load .mat file in the place of more tedious user input
+% Load .mat file in the place of more tedious user input. This file must be in the same folder to work
 load('VTOL_properties')
 
 %% Calculations
